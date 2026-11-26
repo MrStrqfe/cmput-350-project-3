@@ -11,7 +11,7 @@ namespace ECSEngine {
 // e.g. shaders.RegisterShader(path + "shaders/lighting.frag", "lighting")
 // while building a scene sprite.shader = shaders.GetShader("lighting");
 // Each scene owns one (see SceneView::GetShaderManager).
-// See ShaderManager.cpp for how it works on how long pointers stay valid
+// See ShaderManager.cpp for how it works and how long pointers stay valid
 
 class ShaderManager {
 public:
@@ -25,10 +25,10 @@ public:
     // Loads the fragment shader at 'shaderPath' as 'shaderName'
     // Registering a name again replaces that shader in place.
     // Throws if shaders aren't supported or the file can't be loaded or compiled.
-    // nothing changes when it throws. Ever shader must declar uniform sampler2D texture.
+    // nothing changes when it throws. Ever shader must declare uniform sampler2D texture.
     void RegisterShader(const std::string& shaderPath, const std::string& shaderName);
 
-    // Returns the shader name 'shaderName', or nullptr for an unknown name
+    // Returns the shader named 'shaderName', or nullptr for an unknown name
     // (the SpriteSystem draws a nullptr shader as plain, unshaded sprites)
     sf::Shader* GetShader(const std::string& shaderName);
 

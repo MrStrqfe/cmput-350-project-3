@@ -8,7 +8,7 @@ namespace ECSEngine {
 // Loads fragment shaders and hands them out by name
 // How it works
 //  - mShaders maps a name to a compiled sf::Shader (a GLSL fragment program)
-//  - Only fragment shaders: SFML's built-in vertext stage already passes teh
+//  - Only fragment shaders: SFML's built-in vertex stage already passes the
 // texture coordinate (gl_TexCoord[0]) and the vertex colour (gl_Color, the sprite's tint)
 // through to them
 //  - A shader is compiled into a local first and moved into the map only if it worked
