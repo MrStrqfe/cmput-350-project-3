@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EntityManager.h"
+#include "ShaderManager.h"
 #include "SystemManager.h"
 #include "WindowManager.h"
 
@@ -23,10 +24,11 @@ public:
     virtual EntityManager<Components...>& GetEntityManager() = 0;
     virtual WindowManager& GetWindowManager() = 0;
     virtual SystemManager<Components...>& GetSystemManager() = 0;
+    virtual ShaderManager& GetShaderManager() = 0;
     virtual tSceneReturn DoOneFrame(EngineView<Components...>* engine) = 0;
 };
 
-// One scene: its own entities, systems and camera (WindowManager).
+// One scene: its own entities, systems, shaders and camera (WindowManager).
 //   - Made only by ECSEngine::MakeScene (the constructor is private).
 //   - Its WindowManager shares the engine's window but has its own camera,
 //     so each scene keeps its own world coordinates.
@@ -35,6 +37,7 @@ class ECSScene : public SceneView<Components...> {
 public:
     EntityManager<Components...>& GetEntityManager() override { return mEntityManager; }
     WindowManager& GetWindowManager() override { return mWindowManager; }
+    ShaderManager& GetShaderManager() override { return mShaderManager; }
     SystemManager<Components...>& GetSystemManager() override { return mSystemManager; }
 
     // Runs every system once. The scene is done when any system returns kExit.
@@ -54,6 +57,7 @@ private:
     EntityManager<Components...> mEntityManager;
     SystemManager<Components...> mSystemManager;
     WindowManager mWindowManager;
+    ShaderManager mShaderManager;
 };
 
 } // namespace ECSEngine
