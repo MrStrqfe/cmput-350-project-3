@@ -114,6 +114,8 @@ private:
 
 // Systems such as the dash timer count frames, so the game runs at a fixed rate.
 inline constexpr unsigned int kFramesPerSecond = 60;
+// The engine clears the window to this once per frame, before any scene draws
+inline constexpr sf::Color kClearColor{135, 206, 235};  // sky blue
 
 template <typename... Components>
 ECSEngine<Components...>::ECSEngine(unsigned int width, unsigned int height,
@@ -126,12 +128,16 @@ template <typename... Components>
 ECSEngine<Components...>::~ECSEngine() {}
 
 // One loop pass is one frame, and only the top scene runs:
-//   1. ProcessEvents  - read the keyboard and window events into the top scene
-//   2. DoOneFrame     - run the top scene's systems; its SpriteSystem clears and draws
-//   3. kSceneDone     - a scene that finished is popped
-//   4. DebugDraw      - collision boxes on top, if turned on
-//   5. display()      - show the finished frame (this also waits to keep 60 FPS)
-//   6. PushNewScenes  - scenes added this frame go on top for the next frame
+//  1. ProcessEvents    - read the keyboard and window events into the top scene
+//  2. clear            - the engine clears the window once
+//  3. DrawOneFrame     - scenes under an overlay are drawn but not updated (frozen)
+//  4. DoOneFrame       - run the top scene's systems; it draws on top
+//  5. kSceneDone       - a scene that finished is popped
+//  6. DebugDraw        - collision boxes on top, if turned on
+//  7. display()        - show the finished frame (this also waits to keep 60 FPS)
+//  8. PushNewScenes    - scenes added this frame go on top for the next frame
+//  9. ReleaseAllKeys   - if the top scene changed, it starts with no keys held,
+//                      since it missed key releases while it wasn't on top
 // The loop ends when the window is closed or no scenes are left.
 template <typename... Components>
 void ECSEngine<Components...>::Run() {
@@ -150,6 +156,11 @@ void ECSEngine<Components...>::Run() {
         }
         step = false;
 
+        window->clear(kClearColor);
+        for (size_t i = FirstSceneToDraw(mScenes); i+1 < mScenes.size(); ++i) {
+            mScenes[i]->DrawOneFrame(this);
+        }
+
         // Only pop it if a system didn't already pop it (or push over it).
         if (scene->DoOneFrame(this) == kSceneDone && !mScenes.empty() && mScenes.back() == scene) {
             mScenes.pop_back();
@@ -157,6 +168,10 @@ void ECSEngine<Components...>::Run() {
         if (debug) DebugDraw(*scene);
         window->display();
         PushNewScenes();
+
+        if (!mScenes.empty() && mScenes.back() != scene) {
+            ReleaseAllKeys(mScenes.back()->GetEntityManager());
+        }
     }
     window->close();
 }
@@ -186,9 +201,7 @@ bool ECSEngine<Components...>::ProcessEvents(SceneView<Components...>& scene) {
         } else if (const auto* released = event->getIf<sf::Event::KeyReleased>()) {
             SetKey(entities, released->scancode, false);
         } else if (event->is<sf::Event::FocusLost>()) {
-            // Key releases are missed while another window has focus, so let
-            // go of every key instead of leaving one stuck down.
-            for (auto& input : inputs.mStorage) input.keydown.reset();
+            ReleaseAllKeys(entities);
         }
     }
     return true;

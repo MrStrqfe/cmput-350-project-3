@@ -26,14 +26,14 @@ public:
         return name;
     }
 
+    bool IsDrawSystem() const override { return true; }
+
     tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* scene) override {
         auto& entities = scene->GetEntityManager();
         auto& sprites = engine->GetSpriteManager();
         auto& windowManager = scene->GetWindowManager();
         auto window = windowManager.GetWindow();
         const sf::Vector2u windowSize = window->getSize();
-
-        window->clear(sf::Color(135, 206, 235));
 
         // Walk only the sprite pool. Slots are in creation order, so things
         // created first (the sky are drawn first, underneath everything else)

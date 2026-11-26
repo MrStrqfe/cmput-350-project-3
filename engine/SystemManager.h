@@ -1,7 +1,7 @@
 #pragma once
 
-#include <vector>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -30,11 +30,15 @@ public:
     virtual tSystemReturn Run(EngineView<Components...>* engine,
                               SceneView<Components...>* scene) = 0;
     virtual const std::string& GetName() const = 0;
+    // True for systems that only draw (e.g. SpriteSystem). These still run when
+    // the scene is frozen under an overlay, so it stays visible
+    virtual bool IsDrawSystem() const { return false; }
 };
 
 // Holds a scene's system and runs them in the order they were added.
-//   - AddSystem takes ownership; systems are freed with the SystemManager.
-//   - Run returns kExit as soon as a system does (later systems are skipped).
+//  - AddSystem takes ownership; systems are freed with the SystemManager.
+//  - Run returns kExit as soon as a system does (later systems are skipped).
+//  - Draw runs only the draw systems, for a scene frozen under an overlay.
 template <typename... Components>
 class SystemManager {
 public:
@@ -47,6 +51,16 @@ public:
         }
         return kContinue;
     }
+
+    // A frozen scene can't exit, so the return values are ignored
+    void Draw(EngineView<Components...>* engine, SceneView<Components...>* scene) {
+        for (auto& system : mSystems) {
+            if (system->IsDrawSystem()) {
+                (void)system->Run(engine, scene);
+            }
+        }
+    }
+
     void AddSystem(std::unique_ptr<System<Components...>>&& system) {
         mSystems.push_back(std::move(system));
     }

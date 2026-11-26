@@ -263,7 +263,7 @@ int main(int argc, char* argv[]) {
     engine.AddScene(gameplay);
     
     // can delete later, see if spritesheet is actually built 
-    (void)engine.GetSpriteManager().GetTexture().copyToImage().saveToFile("spritesheet.png");
+    //(void)engine.GetSpriteManager().GetTexture().copyToImage().saveToFile("spritesheet.png");
     
     engine.Run();
     return 0;
