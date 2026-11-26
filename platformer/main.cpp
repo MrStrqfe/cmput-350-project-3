@@ -261,6 +261,10 @@ int main(int argc, char* argv[]) {
     sm.AddSystem(std::make_unique<ECSEngine::SpawnSystem<COMPONENTS>>());
 
     engine.AddScene(gameplay);
+    
+    // can delete later, see if spritesheet is actually built 
+    (void)engine.GetSpriteManager().GetTexture().copyToImage().saveToFile("spritesheet.png");
+    
     engine.Run();
     return 0;
 }
