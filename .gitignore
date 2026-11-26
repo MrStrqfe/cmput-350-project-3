@@ -71,8 +71,10 @@ dkms.conf
 *.out
 *.app
 
+!assets/*.map
 xcuserdata/
 .idea/
 cmake-build-*/
 .DS_Store
 build/
+.cache/
