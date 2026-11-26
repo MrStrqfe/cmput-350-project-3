@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "MathUtil.h"
 #include "MovementComponent.h"
 #include "RespawnComponent.h"
+#include "Scene.h"
 #include "ScoreComponent.h"
 #include "SoundManager.h"
 #include "SpawnComponent.h"
@@ -28,18 +30,27 @@
 
 namespace ECSEngine {
 
-// What systems see of the engine: one getter per resource manager.
-//   - Systems fetch managers through these getters on every Run; they never
-//     keep their own pointer to a manager.
+// What systems see of the engine: the shared managers plus the scene stack.
+//   - Entities, systems and the camera belong to each scene (see SceneView).
+//   - Sounds and sprites are shared by every scene, so they live here.
 //   - The returned references are valid for the engine's whole life. Data you
 //     get from a manager has its own rules (see that manager's comment).
 template <typename... Components>
 class EngineView {
 public:
+    virtual ~EngineView() = default;
     virtual SoundManager& GetSoundManager() = 0;
     virtual SpriteManager& GetSpriteManager() = 0;
-    virtual EntityManager<Components...>& GetEntityManager() = 0;
-    virtual WindowManager& GetWindowManager() = 0;
+
+    // The scene on top of the stack (the one running), or nullptr if there is none.
+    virtual std::shared_ptr<SceneView<Components...>> GetScene() = 0;
+    // A new, empty scene. It does nothing until it is passed to AddScene.
+    virtual std::shared_ptr<SceneView<Components...>> MakeScene() = 0;
+    // Pushes `scene` on top of the stack at the end of the current frame.
+    virtual void AddScene(std::shared_ptr<SceneView<Components...>> scene) = 0;
+    // Removes the top scene. Safe to call from a system of that scene: the
+    // scene stays alive until its frame finishes.
+    virtual void PopScene() = 0;
 };
 
 template <typename... Components>
@@ -48,37 +59,52 @@ public:
     ECSEngine(unsigned int width, unsigned int height, const std::string& name);
     ~ECSEngine();
 
-    // Runs every system once per frame until a system returns kExit or the window closes.
+    // Runs the top scene once per frame until no scenes are left or the window closes.
     void Run();
 
-    // The engine owns all managers. Each reference is valid as long as the engine exists.
+    // The engine owns the shared managers. Each reference is valid as long as the engine exists.
     SoundManager& GetSoundManager() override { return mSoundManager; }
 
     SpriteManager& GetSpriteManager() override { return mSpriteManager; }
 
-    EntityManager<Components...>& GetEntityManager() override { return mEntityManager; }
+    std::shared_ptr<SceneView<Components...>> GetScene() override {
+        return mScenes.empty() ? nullptr : mScenes.back();
+    }
 
-    WindowManager& GetWindowManager() override { return mWindowManager; }
+    // ECSScene's constructor is private (only the engine makes scenes), so
+    // make_shared can't be used here.
+    std::shared_ptr<SceneView<Components...>> MakeScene() override {
+        auto ptr = new ECSScene<Components...>(mWindowManager);
+        return std::shared_ptr<ECSScene<Components...>>(ptr);
+    }
 
-    // Only used by main to add systems; systems themselves don't see it.
-    SystemManager<Components...>& GetSystemManager() { return mSystemManager; }
+    void AddScene(std::shared_ptr<SceneView<Components...>> scene) override {
+        mNewScenes.push_back(scene);
+    }
+
+    void PopScene() override {
+        if (!mScenes.empty()) mScenes.pop_back();
+    }
 
 private:
-    // Handles window events and updates every InputComponent. Returns false
-    // when the window is closed.
-    bool ProcessEvents();
-    // Sets or clears one key's bit in every InputComponent.
-    void SetKey(sf::Keyboard::Scancode key, bool down);
+    // Handles window events and updates every InputComponent in `scene`.
+    // Returns false when the window is closed.
+    bool ProcessEvents(SceneView<Components...>& scene);
+    // Sets or clears one key's bit in every InputComponent in `entities`.
+    void SetKey(EntityManager<Components...>& entities, sf::Keyboard::Scancode key, bool down);
     // Handles the F1/F2/F3 debug keys. Returns true if `key` was one of them.
     bool HandleDebugKey(sf::Keyboard::Scancode key);
-    // Outlines every collision box (red = moving, green = static).
-    void DebugDraw();
+    // Outlines every collision box in `scene` (red = moving, green = static).
+    void DebugDraw(SceneView<Components...>& scene);
+    // Moves scenes added during the last frame onto the top of the stack.
+    void PushNewScenes();
 
-    EntityManager<Components...> mEntityManager;
-    SystemManager<Components...> mSystemManager;
     SpriteManager mSpriteManager;
     SoundManager mSoundManager;
-    WindowManager mWindowManager;
+    WindowManager mWindowManager;  // owns the window; scenes share it
+
+    std::vector<std::shared_ptr<SceneView<Components...>>> mScenes;     // back() is on top
+    std::vector<std::shared_ptr<SceneView<Components...>>> mNewScenes;  // added this frame
 
     // For debugging - pause and step the engine
     bool running;  // false while paused (F1)
@@ -99,17 +125,22 @@ ECSEngine<Components...>::ECSEngine(unsigned int width, unsigned int height,
 template <typename... Components>
 ECSEngine<Components...>::~ECSEngine() {}
 
-// One loop pass is one frame:
-//   1. ProcessEvents  - read the keyboard and window events
-//   2. systems        - update the game; the SpriteSystem clears and draws the sprites
-//   3. DebugDraw      - collision boxes on top, if turned on
-//   4. display()      - show the finished frame (this also waits to keep 60 FPS)
-// The loop ends when the window is closed or a system returns kExit.
+// One loop pass is one frame, and only the top scene runs:
+//   1. ProcessEvents  - read the keyboard and window events into the top scene
+//   2. DoOneFrame     - run the top scene's systems; its SpriteSystem clears and draws
+//   3. kSceneDone     - a scene that finished is popped
+//   4. DebugDraw      - collision boxes on top, if turned on
+//   5. display()      - show the finished frame (this also waits to keep 60 FPS)
+//   6. PushNewScenes  - scenes added this frame go on top for the next frame
+// The loop ends when the window is closed or no scenes are left.
 template <typename... Components>
 void ECSEngine<Components...>::Run() {
     auto window = mWindowManager.GetWindow();
-    while (window->isOpen()) {
-        if (!ProcessEvents()) break;
+    PushNewScenes();  // scenes added before Run()
+    while (window->isOpen() && !mScenes.empty()) {
+        // A local copy keeps the scene alive even if a system pops it mid-frame.
+        std::shared_ptr<SceneView<Components...>> scene = mScenes.back();
+        if (!ProcessEvents(*scene)) break;
 
         if (!running && !step) {
             // Paused: keep showing the last frame. display() is what normally
@@ -119,18 +150,29 @@ void ECSEngine<Components...>::Run() {
         }
         step = false;
 
-        if (!mSystemManager.Run(this)) break;
-        if (debug) DebugDraw();
+        // Only pop it if a system didn't already pop it (or push over it).
+        if (scene->DoOneFrame(this) == kSceneDone && !mScenes.empty() && mScenes.back() == scene) {
+            mScenes.pop_back();
+        }
+        if (debug) DebugDraw(*scene);
         window->display();
+        PushNewScenes();
     }
     window->close();
 }
 
 template <typename... Components>
-bool ECSEngine<Components...>::ProcessEvents() {
+void ECSEngine<Components...>::PushNewScenes() {
+    for (auto& scene : mNewScenes) mScenes.push_back(std::move(scene));
+    mNewScenes.clear();
+}
+
+template <typename... Components>
+bool ECSEngine<Components...>::ProcessEvents(SceneView<Components...>& scene) {
     // Remember last frame's keys so systems can tell a new press
     // (keydown set, lastKeydown clear) from a key that is being held.
-    auto& inputs = mEntityManager.template GetComponentStorage<InputComponent>();
+    auto& entities = scene.GetEntityManager();
+    auto& inputs = entities.template GetComponentStorage<InputComponent>();
     for (size_t i = 0; i < inputs.mStorage.size(); ++i) {
         if (inputs.mValid[i]) inputs.mStorage[i].lastKeydown = inputs.mStorage[i].keydown;
     }
@@ -140,9 +182,9 @@ bool ECSEngine<Components...>::ProcessEvents() {
         if (event->is<sf::Event::Closed>()) {
             return false;
         } else if (const auto* pressed = event->getIf<sf::Event::KeyPressed>()) {
-            if (!HandleDebugKey(pressed->scancode)) SetKey(pressed->scancode, true);
+            if (!HandleDebugKey(pressed->scancode)) SetKey(entities, pressed->scancode, true);
         } else if (const auto* released = event->getIf<sf::Event::KeyReleased>()) {
-            SetKey(released->scancode, false);
+            SetKey(entities, released->scancode, false);
         } else if (event->is<sf::Event::FocusLost>()) {
             // Key releases are missed while another window has focus, so let
             // go of every key instead of leaving one stuck down.
@@ -153,11 +195,12 @@ bool ECSEngine<Components...>::ProcessEvents() {
 }
 
 template <typename... Components>
-void ECSEngine<Components...>::SetKey(sf::Keyboard::Scancode key, bool down) {
+void ECSEngine<Components...>::SetKey(EntityManager<Components...>& entities,
+                                      sf::Keyboard::Scancode key, bool down) {
     if (key == sf::Keyboard::Scancode::Unknown) return;  // -1, not a valid bit
     const auto bit = static_cast<size_t>(key);
 
-    auto& inputs = mEntityManager.template GetComponentStorage<InputComponent>();
+    auto& inputs = entities.template GetComponentStorage<InputComponent>();
     for (size_t i = 0; i < inputs.mStorage.size(); ++i) {
         if (inputs.mValid[i]) inputs.mStorage[i].keydown.set(bit, down);
     }
@@ -183,23 +226,25 @@ bool ECSEngine<Components...>::HandleDebugKey(sf::Keyboard::Scancode key) {
 }
 
 template <typename... Components>
-void ECSEngine<Components...>::DebugDraw() {
-    auto& collisions = mEntityManager.template GetComponentStorage<CollisionComponent>();
+void ECSEngine<Components...>::DebugDraw(SceneView<Components...>& scene) {
+    auto& entities = scene.GetEntityManager();
+    WindowManager& window = scene.GetWindowManager();  // the scene's camera
+    auto& collisions = entities.template GetComponentStorage<CollisionComponent>();
     for (size_t i = 0; i < collisions.mStorage.size(); ++i) {
         if (!collisions.mValid[i]) continue;
         const CollisionComponent& c = collisions.mStorage[i];
         // The box is stored relative to the entity's location.
         Rect box = c.collisionBox;
         const EntityID owner = collisions.mOwner[i];
-        if (mEntityManager.template HasComponent<LocationComponent>(owner)) {
-            const Point2D& loc = mEntityManager.template GetComponent<LocationComponent>(owner).loc;
+        if (entities.template HasComponent<LocationComponent>(owner)) {
+            const Point2D& loc = entities.template GetComponent<LocationComponent>(owner).loc;
             box.topLeft = Point2D{box.topLeft.x + loc.x, box.topLeft.y + loc.y};
         }
-        box = mWindowManager.WorldToWindow(box);
+        box = window.WorldToWindow(box);
         if (c.staticEntity) {
-            mWindowManager.DebugFrameRect(box, 0, 255, 0);
+            window.DebugFrameRect(box, 0, 255, 0);
         } else {
-            mWindowManager.DebugFrameRect(box, 255, 0, 0);
+            window.DebugFrameRect(box, 255, 0, 0);
         }
     }
 }

@@ -15,6 +15,8 @@ namespace ECSEngine {
 class WindowManager {
 public:
     WindowManager(unsigned int width, unsigned int height, const std::string& title);
+    // Shares an existing window but keeps its own camera (used by each scene).
+    explicit WindowManager(std::shared_ptr<sf::RenderWindow> window);
     ~WindowManager() = default;
     std::shared_ptr<sf::RenderWindow> GetWindow() const;
     Rect GetWindowBounds() const;

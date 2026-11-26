@@ -5,6 +5,7 @@
 #include "EntityManager.h"
 #include "LocationComponent.h"
 #include "MovementComponent.h"
+#include "Scene.h"
 #include "SystemManager.h"
 
 namespace ECSEngine {
@@ -27,8 +28,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override {
-        auto &entities{engine->GetEntityManager()};
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+        auto &entities{scene->GetEntityManager()};
 
         // Go through only entities with the movement component
         auto &movements = entities.template GetComponentStorage<MovementComponent>();

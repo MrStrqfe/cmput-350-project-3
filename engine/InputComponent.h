@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bitset>
+#include <limits>
 #include <unordered_map>
 
 #include "Entity.h"
@@ -14,7 +15,10 @@ namespace ECSEngine {
 // Keyboard state for an entity the player controls. The engine fills the bits
 // every frame; InputSystem reads them.
 struct InputComponent {
-    InputComponent(EntityID whichEntity) : entity(whichEntity), lastDash(0) {}
+    // lastDash starts far in the past so the very first dash is allowed right away
+    // (halved so `frame - lastDash` can't overflow).
+    InputComponent(EntityID whichEntity)
+        : entity(whichEntity), lastDash(std::numeric_limits<int>::min() / 2) {}
     EntityID entity;                                       // the entity this input controls
     int lastDash;                                          // frame of the last dash (dash cooldown)
     std::bitset<sf::Keyboard::ScancodeCount> keydown;      // keys held this frame, indexed by scancode

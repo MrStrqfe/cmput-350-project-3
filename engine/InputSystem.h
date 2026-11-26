@@ -11,6 +11,7 @@
 #include "InputComponent.h"
 #include "Keyboard.h"
 #include "MovementComponent.h"
+#include "Scene.h"
 #include "SoundManager.h"
 #include "SystemManager.h"
 
@@ -46,8 +47,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override {
-        auto &entities{engine->GetEntityManager()};
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* scene) override {
+        auto &entities{scene->GetEntityManager()};
         auto &sounds  {engine->GetSoundManager()};
 
         // loop through all input components

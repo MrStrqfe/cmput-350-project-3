@@ -23,6 +23,7 @@ endif()
 
 set(ECS_ENGINE_FILES
     ECSEngine.h
+    Scene.h
     Entity.h
     MathUtil.h
     Keyboard.h

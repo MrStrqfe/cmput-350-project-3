@@ -14,6 +14,7 @@
 #include "LocationComponent.h"
 #include "MovementComponent.h"
 #include "RespawnComponent.h"
+#include "Scene.h"
 #include "ScoreComponent.h"
 #include "SystemManager.h"
 
@@ -49,8 +50,8 @@ public:
 
     // Runs once per frame: sorts boxes, pushes movers out of the map,
     // handles player/star and star/star hits, then removes collected stars
-    tSystemReturn Run(EngineView<Components...>* engine) override {
-        auto& entities = engine->GetEntityManager();
+    tSystemReturn Run(EngineView<Components...>* engine, SceneView<Components...>* scene) override {
+        auto& entities = scene->GetEntityManager();
         auto& collisions = entities.template GetComponentStorage<CollisionComponent>();
 
         // Sort the collision slots into moving and static ones
@@ -80,9 +81,9 @@ public:
 
         CameraShake* shake = FindFirst<CameraShake>(entities);
         for (size_t slot : mDynamic) {
-            ResolveAgainstStatic(engine, slot, shake);
+            ResolveAgainstStatic(engine, scene, slot, shake);
         }
-        ResolveDynamicPairs(engine);
+        ResolveDynamicPairs(engine, scene);
 
         // Removed after the loops so no slot disappears while it is being checked
         for (EntityID star : mToRemove) {
@@ -166,8 +167,9 @@ private:
     // Pushes one moving entity out of any static boxes it overlaps and sets its
     // onGround/onCeiling/wall flags. Spikes respawn it. Also plays the land sound
     // and starts the camera shake on hard hits
-    void ResolveAgainstStatic(EngineView<Components...>* engine, size_t slot, CameraShake* shake) {
-        auto& entities = engine->GetEntityManager();
+    void ResolveAgainstStatic(EngineView<Components...>* engine, SceneView<Components...>* scene,
+                              size_t slot, CameraShake* shake) {
+        auto& entities = scene->GetEntityManager();
         auto& collisions = entities.template GetComponentStorage<CollisionComponent>();
 
         CollisionComponent& c = collisions.mStorage[slot];
@@ -313,8 +315,8 @@ private:
 
     // Checks every pair of moving entities. Player + star: collect the star.
     // Star + star: push them apart and bounce them off each other
-    void ResolveDynamicPairs(EngineView<Components...>* engine) {
-        auto& entities = engine->GetEntityManager();
+    void ResolveDynamicPairs(EngineView<Components...>* engine, SceneView<Components...>* scene) {
+        auto& entities = scene->GetEntityManager();
         auto& collisions = entities.template GetComponentStorage<CollisionComponent>();
         mCollected.assign(mDynamic.size(), false);
 

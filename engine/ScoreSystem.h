@@ -4,6 +4,7 @@
 #include <string>
 #include "Entity.h"
 #include "EntityManager.h"
+#include "Scene.h"
 #include "ScoreComponent.h"
 #include "SpriteComponent.h"
 #include "SystemManager.h"
@@ -23,8 +24,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override {
-        auto &entities{engine->GetEntityManager()};
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+        auto &entities{scene->GetEntityManager()};
 
         // Go through entities with score component only
         auto &scores{entities.template GetComponentStorage<ScoreComponent>()};

@@ -3,6 +3,7 @@
 #include "CollisionComponent.h"
 #include "EntityManager.h"
 #include "LocationComponent.h"
+#include "Scene.h"
 #include "SystemManager.h"
 
 namespace ECSEngine {
@@ -21,9 +22,9 @@ public:
     tell which side an entity hit from
     */
 
-    tSystemReturn Run(EngineView<Components...>* engine) override { 
-        
-        auto& entities = engine->GetEntityManager();
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+
+        auto& entities = scene->GetEntityManager();
 
         auto& collisions = entities.template GetComponentStorage<CollisionComponent>();
 

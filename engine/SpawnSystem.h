@@ -8,6 +8,7 @@
 #include "GravityComponent.h"
 #include "LocationComponent.h"
 #include "MovementComponent.h"
+#include "Scene.h"
 #include "SpawnComponent.h"
 #include "SpriteComponent.h"
 #include "SystemManager.h"
@@ -32,8 +33,8 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override { 
-        auto& entities = engine->GetEntityManager();
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+        auto& entities = scene->GetEntityManager();
         auto& spawners = entities.template GetComponentStorage<SpawnComponent>();
         
         for (size_t i = 0; i < spawners.mStorage.size(); ++i) {

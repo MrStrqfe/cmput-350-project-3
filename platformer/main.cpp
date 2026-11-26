@@ -40,6 +40,7 @@ const unsigned int kWindowHeight = 768;
         ECSEngine::CameraFollower, ECSEngine::InputComponent, ECSEngine::GravityComponent,     \
         ECSEngine::CameraShake, ECSEngine::ScoreComponent, ECSEngine::RespawnComponent
 using Engine = ECSEngine::ECSEngine<COMPONENTS>;
+using Scene = ECSEngine::SceneView<COMPONENTS>;
 
 // The star the spawners create, in spritesheet-tiles-default.png.
 const std::string kStarSheet = "spritesheet-tiles-default.png";
@@ -56,7 +57,8 @@ struct MapTile {
     ECSEngine::Rect collide;  // relative to the tile's top-left corner
 };
 
-// Loads a map file and creates one entity per tile.
+// Loads a map file and creates one entity per tile in `scene`.
+// Sprites go in the engine's shared SpriteManager.
 //
 // File format (from the project spec)
 //   dictionary <1|2>
@@ -66,7 +68,7 @@ struct MapTile {
 //
 // Every tile gets a location and a sprite. With "dictionary 2" tiles are also
 // solid, and 'S' tiles also spawn stars. Throws if the file is missing or broken.
-void LoadMap(Engine& engine, const std::string& path, const std::string& file) {
+void LoadMap(Engine& engine, Scene& scene, const std::string& path, const std::string& file) {
     std::ifstream in(path + file);
     if (!in) throw std::runtime_error("LoadMap: could not open '" + path + file + "'");
     auto fail = [&](const std::string& why) {
@@ -74,7 +76,7 @@ void LoadMap(Engine& engine, const std::string& path, const std::string& file) {
     };
 
     auto& sprites = engine.GetSpriteManager();
-    auto& entities = engine.GetEntityManager();
+    auto& entities = scene.GetEntityManager();
 
     // 1. Dictionary: map each character to a sprite (and collision box).
     std::string word;
@@ -160,7 +162,10 @@ int main(int argc, char* argv[]) {
 
     // Engine test code
     Engine engine(kWindowWidth, kWindowHeight, "Test Engine");
-    auto& entities = engine.GetEntityManager();
+
+    // The whole Project 2 game runs as one gameplay scene.
+    std::shared_ptr<Scene> gameplay = engine.MakeScene();
+    auto& entities = gameplay->GetEntityManager();
     auto& sprites = engine.GetSpriteManager();
 
     // Load sounds
@@ -173,8 +178,8 @@ int main(int argc, char* argv[]) {
     sounds.RegisterSound(gResourcePath + "footstep_grass_003.ogg", "land");
 
     // Load maps. The sky goes first so its sprites are drawn behind the world.
-    LoadMap(engine, gResourcePath, "sky.map");
-    LoadMap(engine, gResourcePath, "world.map");
+    LoadMap(engine, *gameplay, gResourcePath, "sky.map");
+    LoadMap(engine, *gameplay, gResourcePath, "world.map");
 
     // One extra star past the first wall, to test wall jumping
     // It has no MovementComponent, so it floats in place until collected
@@ -240,11 +245,11 @@ int main(int argc, char* argv[]) {
     entities.AddComponent(cameraEntity, camera);
     entities.AddComponent(cameraEntity, ECSEngine::CameraShake{0, {0.0f, 0.0f}});
 
-    engine.GetWindowManager().SetWorldScale(camera.worldUnitsPerPixel);
-    engine.GetWindowManager().SetWorldCenter(camera.position);
+    gameplay->GetWindowManager().SetWorldScale(camera.worldUnitsPerPixel);
+    gameplay->GetWindowManager().SetWorldCenter(camera.position);
 
     // Add all systems
-    auto& sm = engine.GetSystemManager();
+    auto& sm = gameplay->GetSystemManager();
     sm.AddSystem(std::make_unique<ECSEngine::CollisionLateSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::InputSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::GravitySystem<COMPONENTS>>());
@@ -255,6 +260,7 @@ int main(int argc, char* argv[]) {
     sm.AddSystem(std::make_unique<ECSEngine::SpriteSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::SpawnSystem<COMPONENTS>>());
 
+    engine.AddScene(gameplay);
     engine.Run();
     return 0;
 }

@@ -10,6 +10,7 @@
 #include "EntityManager.h"
 #include "LocationComponent.h"
 #include "MathUtil.h"
+#include "Scene.h"
 #include "SystemManager.h"
 
 namespace ECSEngine {
@@ -30,9 +31,9 @@ public:
         return name;
     }
 
-    tSystemReturn Run(EngineView<Components...>* engine) override { 
-        auto& entities = engine->GetEntityManager();
-        auto& window = engine->GetWindowManager();
+    tSystemReturn Run(EngineView<Components...>* /*engine*/, SceneView<Components...>* scene) override {
+        auto& entities = scene->GetEntityManager();
+        auto& window = scene->GetWindowManager();
         auto& cameras = entities.template GetComponentStorage<CameraComponent>();
         const CameraFollower* follower = FindFirst<CameraFollower>(entities);
 
