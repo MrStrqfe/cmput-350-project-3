@@ -23,7 +23,7 @@ const float kDashVelocity = 50;
 const float kJumpVelocity = 32;
 const float kGroundRunAcceleration = 5;
 const float kAirRunAcceleration = 4;
-const float kDashInterval = 25;
+const float kDashInterval = 60;
 
 // additional variables
 const int kDashFrames = 4;              // how long one dash lasts
