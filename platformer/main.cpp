@@ -34,6 +34,10 @@ std::string gResourcePath = "../assets/";
 const unsigned int kWindowWidth = 1024;
 const unsigned int kWindowHeight = 768;
 
+// The sky is drawn behind the world and scrolls at 30% of its speed
+const int kSkyLayer = -1;
+const float kSkyParallax = 0.3f;
+
 #define COMPONENTS                                                                             \
     ECSEngine::LocationComponent, ECSEngine::MovementComponent, ECSEngine::CollisionComponent, \
         ECSEngine::SpriteComponent, ECSEngine::SpawnComponent, ECSEngine::CameraComponent,     \
@@ -68,7 +72,7 @@ struct MapTile {
 //
 // Every tile gets a location and a sprite. With "dictionary 2" tiles are also
 // solid, and 'S' tiles also spawn stars. Throws if the file is missing or broken.
-void LoadMap(Engine& engine, Scene& scene, const std::string& path, const std::string& file) {
+void LoadMap(Engine& engine, Scene& scene, const std::string& path, const std::string& file, int layer) {
     std::ifstream in(path + file);
     if (!in) throw std::runtime_error("LoadMap: could not open '" + path + file + "'");
     auto fail = [&](const std::string& why) {
@@ -134,7 +138,7 @@ void LoadMap(Engine& engine, Scene& scene, const std::string& path, const std::s
             // Sprite and collision boxes are relative to the location (see LocationComponent).
             entities.AddComponent(
                 id, ECSEngine::SpriteComponent{tile.sprite, {{0.f, 0.f}, tileWidth, tileHeight},
-                                               true});
+                                               true, layer});
             if (tile.solid) {
                 ECSEngine::CollisionComponent collision{};
                 collision.staticEntity = 1;
@@ -178,8 +182,8 @@ int main(int argc, char* argv[]) {
     sounds.RegisterSound(gResourcePath + "footstep_grass_003.ogg", "land");
 
     // Load maps. The sky goes first so its sprites are drawn behind the world.
-    LoadMap(engine, *gameplay, gResourcePath, "sky.map");
-    LoadMap(engine, *gameplay, gResourcePath, "world.map");
+    LoadMap(engine, *gameplay, gResourcePath, "sky.map", kSkyLayer);
+    LoadMap(engine, *gameplay, gResourcePath, "world.map", 0);
 
     // One extra star past the first wall, to test wall jumping
     // It has no MovementComponent, so it floats in place until collected
@@ -257,7 +261,7 @@ int main(int argc, char* argv[]) {
     sm.AddSystem(std::make_unique<ECSEngine::CollisionSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::ScoreSystem<COMPONENTS>>());
     sm.AddSystem(std::make_unique<ECSEngine::CameraSystem<COMPONENTS>>());
-    sm.AddSystem(std::make_unique<ECSEngine::SpriteSystem<COMPONENTS>>());
+    sm.AddSystem(std::make_unique<ECSEngine::SpriteSystem<COMPONENTS>>(std::map<int, float>{{kSkyLayer, kSkyParallax}}));
     sm.AddSystem(std::make_unique<ECSEngine::SpawnSystem<COMPONENTS>>());
 
     engine.AddScene(gameplay);
