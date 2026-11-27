@@ -242,6 +242,7 @@ template <typename... Components>
 void ECSEngine<Components...>::DebugDraw(SceneView<Components...>& scene) {
     auto& entities = scene.GetEntityManager();
     WindowManager& window = scene.GetWindowManager();  // the scene's camera
+    window.GetWindow()->setView(window.GetPixelView()); // boxes are in window pixels
     auto& collisions = entities.template GetComponentStorage<CollisionComponent>();
     for (size_t i = 0; i < collisions.mStorage.size(); ++i) {
         if (!collisions.mValid[i]) continue;

@@ -1,27 +1,23 @@
+#include <algorithm>
+#include <SFML/Graphics/Rect.hpp>
+
 #include "WindowManager.h"
 
 namespace ECSEngine {
 
-// Owns the game window and converts between world and window coordinates.
-//
-// How it works
-//   - The camera is a world point (mWorldCenter) shown at the window's center,
-//     plus a zoom (mWorldUnitsPerPixel = world units per window pixel).
-//   - WorldToWindow / WindowToWorld use those two values to convert points,
-//     rects and distances (distances only need the zoom).
-//   - DebugDrawRect / DebugFrameRect draw in window coordinates, so convert
-//     world rects with WorldToWindow first.
-//
-// Lifetimes
-//   - The window is a shared_ptr: anyone holding a copy from GetWindow keeps
-//     it alive, even after the WindowManager is gone.
-//   - Converted values use the current camera. Convert again after the camera
-//     moves or zooms; don't keep them across frames.
 
+// The camera is an sf::View, resized to fit the window on every call
+// SetLogicalSize fixes its size instead and adds bars to keep its shape.
+// Conversions keep fractions of a pixel, so tiles don't get 1 px gaps.
+// Converted values use the current camera, so don't keep them across frames.
 WindowManager::WindowManager(unsigned int width, unsigned int height, const std::string& title)
-    : mWindow(std::make_shared<sf::RenderWindow>(sf::VideoMode({width, height}), title)) {}
+    : mWindow(std::make_shared<sf::RenderWindow>(sf::VideoMode({width, height}), title)) {
+        mView = GetPixelView();
+    }
 
-WindowManager::WindowManager(std::shared_ptr<sf::RenderWindow> window) : mWindow(std::move(window)) {}
+WindowManager::WindowManager(std::shared_ptr<sf::RenderWindow> window) : mWindow(std::move(window)) {
+    mView = GetPixelView();
+}
 
 std::shared_ptr<sf::RenderWindow> WindowManager::GetWindow() const { return mWindow; }
 
@@ -65,71 +61,97 @@ void WindowManager::DebugFrameRect(const Rect& r, int red, int green, int blue, 
 
 // Rects: the corner converts as a point, the width and height as distances.
 Rect WindowManager::WindowToWorld(const Rect& rect) const {
-    Point2D newTopLeft{WindowToWorld(rect.topLeft)};
-    float newWidth{WindowToWorld(rect.width)};
-    float newHeight{WindowToWorld(rect.height)};
-    return Rect{newTopLeft, newWidth, newHeight};
+    return Rect{WindowToWorld(rect.topLeft),WindowToWorld(rect.width), WindowToWorld(rect.height)};
 }
 
-// Same formulas as lab 9: world = view's left/top edge + pixels * zoom.
-// Point2D has no operator+, so each axis is done separately.
+// Reverse of WorldtoWindow
 Point2D WindowManager::WindowToWorld(const Point2D& pt) const {
-    float newX{mWorldCenter.x - ((mWindow->getSize().x * 0.5f) * mWorldUnitsPerPixel) + (pt.x * mWorldUnitsPerPixel)};
-    float newY{mWorldCenter.y - ((mWindow->getSize().y * 0.5f) * mWorldUnitsPerPixel) + (pt.y * mWorldUnitsPerPixel)};
-    return Point2D{newX, newY};
+    const sf::View view = GetView();
+    const sf::FloatRect port {mWindow->getViewport(view)};
+    const sf::Vector2f ndc{(pt.x - port.position.x) / port.size.x * 2.0f - 1.0f, 1.0f - (pt.y - port.position.y) / port.size.y * 2.0f};
+    const sf::Vector2f world = view.getInverseTransform().transformPoint(ndc);
+    return Point2D{world.x, world.y};
 }
 
 Rect WindowManager::WorldToWindow(const Rect& rect) const {
-    Point2D newTopLeft{WorldToWindow(rect.topLeft)};
-    float newWidth{WorldToWindow(rect.width)};
-    float newHeight{WorldToWindow(rect.height)};
-    return Rect{newTopLeft, newWidth, newHeight};
+    return Rect{WorldToWindow(rect.topLeft), WorldToWindow(rect.width), WorldToWindow(rect.height)};
 }
 
-// The reverse of WindowToWorld.
+// The view's transform maps world points to -1 to 1 across its viewport
+// the viewport then places that in window pixels (y down)
 Point2D WindowManager::WorldToWindow(const Point2D& pt) const {
-    float newX{(pt.x - (mWorldCenter.x - ((mWindow->getSize().x * 0.5f) * mWorldUnitsPerPixel))) / mWorldUnitsPerPixel};
-    float newY{(pt.y - (mWorldCenter.y - ((mWindow->getSize().y * 0.5f) * mWorldUnitsPerPixel))) / mWorldUnitsPerPixel};
-    return Point2D{newX, newY};
+    const sf::View view = GetView();
+    const sf::FloatRect port{mWindow->getViewport(view)};
+    const sf::Vector2f ndc = view.getTransform().transformPoint({pt.x, pt.y});
+    return Point2D{port.position.x + (ndc.x + 1.0f) / 2.0f * port.size.x,
+                    port.position.y + (1.0f - ndc.y) / 2.0f * port.size.y};
 }
 
 // Moves the camera so `worldPt` shows up at window position `screenPt`.
 void WindowManager::SetCamera(const Point2D& worldPt, const Point2D& screenPt) {
-    float worldCenterX = worldPt.x - screenPt.x * mWorldUnitsPerPixel + mWindow->getSize().x * 0.5f * mWorldUnitsPerPixel;
-    float worldCenterY = worldPt.y - screenPt.y * mWorldUnitsPerPixel + mWindow->getSize().y * 0.5f * mWorldUnitsPerPixel;
-    mWorldCenter = Point2D{worldCenterX, worldCenterY};
+    const Point2D now = WindowToWorld(screenPt);    // what is at screenPt now
+    mView.move({worldPt.x - now.x, worldPt.y - now.y});
 }
 
 Point2D WindowManager::GetWorldCenter() const {
-    return mWorldCenter;
+    return Point2D{mView.getCenter().x, mView.getCenter().y};
 }
 
 float WindowManager::GetWorldScale() const {
-    return mWorldUnitsPerPixel;
+    return WindowToWorld(1.0f);
 }
 
 void WindowManager::SetWorldCenter(const Point2D& worldCenter) {
-    mWorldCenter = worldCenter;
+    mView.setCenter({worldCenter.x, worldCenter.y});
 }
 
 void WindowManager::SetWorldScale(float worldUnitsPerPixel) {
     mWorldUnitsPerPixel = worldUnitsPerPixel;
+    mFixedSize = false;
+    mView.setViewport(sf::FloatRect{{0.0f, 0.0f}, {1.0f, 1.0f}});
 }
 
 // Centers the camera on the rect. The zoom is left unchanged.
 void WindowManager::SetWorldRect(const Rect& worldCameraRect) {
-    float rectMidX{worldCameraRect.topLeft.x + worldCameraRect.width / 2};
-    float rectMidY{worldCameraRect.topLeft.y + worldCameraRect.height / 2};
-    mWorldCenter = Point2D{rectMidX, rectMidY};
+    SetWorldCenter(Point2D{worldCameraRect.topLeft.x + worldCameraRect.width / 2,
+                            worldCameraRect.topLeft.y + worldCameraRect.height / 2});
 }
 
-// Distances only need the zoom (windowToWorldDist / worldToWindowDist in lab 9).
+// Distances only need the zoom: view width in world units vs viewport in pixels.
 float WindowManager::WindowToWorld(float x) const {
-    return x * mWorldUnitsPerPixel;
+    const sf::View view = GetView();
+    return x * view.getSize().x / static_cast<float>(mWindow->getViewport(view).size.x);
 }
 
 float WindowManager::WorldToWindow(float x) const {
-    return x / mWorldUnitsPerPixel;
+    const sf::View view = GetView();
+    return x * static_cast<float>(mWindow->getViewport(view).size.x) / view.getSize().x;
 }
+
+sf::View WindowManager::GetView() const {
+    sf::View view = mView;
+    const sf::Vector2f window{mWindow->getSize()};
+    if (!mFixedSize) {
+        view.setSize(window * mWorldUnitsPerPixel);
+        return view;
+    }
+    // Letterbox: the biggest rect with the view's shape that fits the window
+    // centered. Viewports are fractions of the window (0 to 1)
+    const sf::Vector2f size = view.getSize();
+    const float fit = std::min(window.x / size.x, window.y / size.y);
+    const sf::Vector2f part{size.x * fit / window.x, size.y * fit / window.y};
+    view.setViewport(sf::FloatRect{{(1.0f - part.x) / 2.0f, (1.0f - part.y) / 2.0f}, part});
+    return view;
+}
+
+sf::View WindowManager::GetPixelView() const {
+    return sf::View{sf::FloatRect{{0.0f, 0.0f}, sf::Vector2f{mWindow->getSize()}}};
+}
+
+void WindowManager::SetLogicalSize(float width, float height) {
+    mView = sf::View{sf::FloatRect{{0.0f, 0.0f}, {width, height}}};
+    mFixedSize = true;
+}
+
 
 }  // namespace ECSEngine

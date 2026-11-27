@@ -8,10 +8,11 @@
 
 namespace ECSEngine {
 
-// Owns the game window and converts between world and window coordinates, e.g.
-//   Rect onScreen = windowManager.WorldToWindow(worldRect);
-//   windowManager.DebugFrameRect(onScreen, 255, 0, 0);
-// See WindowManager.cpp for how it works and how long values stay valid.
+// Owns the game window and one scene's camera (an sf::View), and converts
+// between world and window coordinates.
+// Before drawing, call window->setView(GetView()) for world coordinates or
+// window->setView(GetPixelView()) for window pixels. Never rely on the view
+// set by whatever drew last.
 class WindowManager {
 public:
     WindowManager(unsigned int width, unsigned int height, const std::string& title);
@@ -34,14 +35,18 @@ public:
     Rect WorldToWindow(const Rect& rect) const;
     Point2D WorldToWindow(const Point2D& pt) const;
     Point2D WindowToWorld(const Point2D& pt) const;
+    sf::View GetView() const;
+    sf::View GetPixelView() const;
+    void SetLogicalSize(float width, float height);
 
     void DebugDrawRect(const Rect& r, int red, int green, int blue, int alpha = 255);
     void DebugFrameRect(const Rect& r, int red, int green, int blue, int alpha = 255);
 
 private:
     std::shared_ptr<sf::RenderWindow> mWindow;
-    Point2D mWorldCenter;              // world point shown at the window's center
-    float mWorldUnitsPerPixel = 1.0f;  // 1:1 until the game sets a scale
+    sf::View mView;                                 // its center is the camera; its size is used only if fixed
+    float mWorldUnitsPerPixel = 1.0f;               // 1:1 until the game sets a scale
+    bool mFixedSize = false;                        // true after SetLogicalSize
 };
 
 }  // namespace ECSEngine

@@ -35,6 +35,9 @@ public:
         auto window = windowManager.GetWindow();
         const sf::Vector2u windowSize = window->getSize();
 
+        // Sprites are converted to window pixels below, so draw in pixels
+        window->setView(windowManager.GetPixelView());
+
         // Walk only the sprite pool. Slots are in creation order, so things
         // created first (the sky are drawn first, underneath everything else)
         auto& spriteStore = entities.template GetComponentStorage<SpriteComponent>();
