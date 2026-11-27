@@ -18,6 +18,7 @@
 #include "systems/MenuSystem.h"
 #include "systems/PauseSystem.h"
 #include "systems/VictorySystem.h"
+#include "systems/AnimationSystem.h"
 
 // Builds the four scenes. Menu screens use a fixed kUiWidth x kUiHeight view,
 // so they scale with the window (bonus 2); gameplay uses the camera.
@@ -105,6 +106,19 @@ std::shared_ptr<Scene> MakeUiScene(EngineViewT& engine, sf::Color backdrop) {
     return scene;
 }
 
+// The yellow character's clips. Its frames are in column 0 of the characters sheet, 128 px apart.
+AnimationComponent MakePlayerAnimation(ECSEngine::SpriteManager& sprites) {
+    auto frame = [&](float row) {
+        return sprites.RegisterTexture(gResourcePath + "spritesheet-characters-default.png", {{0.0f, 128.0f * row}, 128.0f, 128.0f});
+    };
+    AnimationComponent anim;
+    anim.clips[kAnimIdle] = {frame(5)};
+    anim.clips[kAnimWalk] = {frame(2), frame(3)};
+    anim.clips[kAnimJump] = {frame(1)};
+    anim.clips[kAnimFall] = {frame(0)};
+    return anim;
+}
+
 }  // namespace
 
 std::shared_ptr<Scene> MakeMenuScene(EngineViewT& engine) {
@@ -168,18 +182,18 @@ std::shared_ptr<Scene> MakeGameplayScene(EngineViewT& engine) {
     entities.AddComponent(bonusStar, bonusCollision);
 
     // Player
-    const ECSEngine::Point2D kPlayerStart{832.f, 512.f};
-    const ECSEngine::SpriteID playerSprite = sprites.RegisterTexture(
-        gResourcePath + "spritesheet-characters-default.png", {{0.0f, 0.0f}, 128.0f, 128.0f});
+    const ECSEngine::Point2D kPlayerStart{832.f, 496.f};
+    const AnimationComponent playerAnim = MakePlayerAnimation(sprites);
     const ECSEngine::EntityID player = entities.CreateEntity("player");
     entities.AddComponent(player, ECSEngine::LocationComponent{kPlayerStart});
     entities.AddComponent(player, ECSEngine::MovementComponent{});
     entities.AddComponent(player, ECSEngine::GravityComponent{{0.0f, 2.0f}});
     entities.AddComponent(player, ECSEngine::InputComponent{player});
     entities.AddComponent(player, ECSEngine::RespawnComponent{kPlayerStart});
-    entities.AddComponent(player, ECSEngine::SpriteComponent{playerSprite, {{0.0f, 0.0f}, 64.0f, 64.0f}, true});
+    entities.AddComponent(player, ECSEngine::SpriteComponent{playerAnim.clips[kAnimIdle][0], {{0.0f, 0.0f}, 80.0f, 80.0f}, true});
+    entities.AddComponent(player, playerAnim);
     ECSEngine::CollisionComponent playerCollision{};
-    playerCollision.collisionBox = {{12.0f, 12.0f}, 40.0f, 52.0f};
+    playerCollision.collisionBox = {{15.0f, 18.0f}, 50.0f, 62.0f};
     playerCollision.previousCollisionBox = playerCollision.collisionBox;
     entities.AddComponent(player, playerCollision);
     entities.AddComponent(player, ECSEngine::CameraFollower{player});
@@ -225,6 +239,7 @@ std::shared_ptr<Scene> MakeGameplayScene(EngineViewT& engine) {
     systems.AddSystem(std::make_unique<ECSEngine::CollisionSystem<COMPONENTS>>());
     systems.AddSystem(std::make_unique<ECSEngine::ScoreSystem<COMPONENTS>>());
     systems.AddSystem(std::make_unique<ECSEngine::CameraSystem<COMPONENTS>>());
+    systems.AddSystem(std::make_unique<AnimationSystem>());
     systems.AddSystem(std::make_unique<ECSEngine::SpriteSystem<COMPONENTS>>(kParallax));
     systems.AddSystem(std::make_unique<ECSEngine::SpawnSystem<COMPONENTS>>());
     return scene;

@@ -23,13 +23,6 @@ struct MapTile {
 }  // namespace
 
 // Map files, one entity per tile. Sprites go in the engine's shared SpriteManager.
-//
-// File format (from the project spec)
-//   dictionary <1|2>
-//   <char> <sheet> <sprite rect> [<collision box>]   one line per tile type
-//   map origin <left top> tile <width height> size <columns rows>
-//   <the grid: one character per tile, unknown characters are empty>
-//
 // Every tile gets a location and a sprite. With "dictionary 2" tiles are also
 // solid, and 'S' tiles also spawn stars.
 std::vector<MapMarker> LoadMap(EngineViewT& engine, Scene& scene, const std::string& path,
