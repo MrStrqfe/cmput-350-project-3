@@ -107,7 +107,7 @@ public:
                 continue;
             }
 
-            const BatchKey key{!sc.worldSpace, sc.layer, sc.shader};
+            const BatchKey key{sc.layer, !sc.worldSpace, sc.shader};
             sf::VertexArray& batch = mBatches.try_emplace(key, sf::PrimitiveType::Triangles).first->second;
             AppendQuad(batch, dest, sprites.GetSprite(sc.textureID).getTextureRect(), sc.tint, sc.flipX);
         }
@@ -119,7 +119,7 @@ public:
             if (batch.getVertexCount() == 0) {
                 continue;
             }
-            const auto& [screen, layer, shader] = key;
+            const auto& [layer, screen, shader] = key;
             window->setView(screen ? pixels : ParallaxView(camera, Parallax(layer)));
             states.shader = shader;
             window->draw(batch, states);
@@ -130,7 +130,7 @@ public:
     }
 
 private:
-    using BatchKey = std::tuple<bool, int, sf::Shader*>;    // (screen space, layer, shader)
+    using BatchKey = std::tuple<int, bool, sf::Shader*>;    // (layer, screen space, shader)
     float Parallax(int layer) const {
         auto found = mParallax.find(layer);
         return found == mParallax.end() ? 1.0f : found->second;

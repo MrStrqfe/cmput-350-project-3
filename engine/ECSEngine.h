@@ -122,6 +122,7 @@ ECSEngine<Components...>::ECSEngine(unsigned int width, unsigned int height,
                                     const std::string& name)
     : mWindowManager(width, height, name), running(true), step(false), debug(0) {
     mWindowManager.GetWindow()->setFramerateLimit(kFramesPerSecond);
+    mWindowManager.GetWindow()->setKeyRepeatEnabled(false);
 }
 
 template <typename... Components>
