@@ -7,6 +7,8 @@
 #include "InputComponent.h"
 #include "Keyboard.h"
 #include "components/AnimationComponent.h"
+#include "components/LanternComponent.h"
+#include "components/LightComponent.h"
 
 // Shared by all game code: the component list, type names, draw layers and keybinds
 
@@ -14,7 +16,8 @@
     ECSEngine::LocationComponent, ECSEngine::MovementComponent, ECSEngine::CollisionComponent,  \
     ECSEngine::SpriteComponent, ECSEngine::SpawnComponent, ECSEngine::CameraComponent,          \
     ECSEngine::CameraFollower, ECSEngine::InputComponent, ECSEngine::GravityComponent,          \
-    ECSEngine::CameraShake, ECSEngine::ScoreComponent, ECSEngine::RespawnComponent, AnimationComponent
+    ECSEngine::CameraShake, ECSEngine::ScoreComponent, ECSEngine::RespawnComponent,             \
+    AnimationComponent, LanternComponent, LightComponent
 
 using Engine = ECSEngine::ECSEngine<COMPONENTS>;
 using EngineViewT = ECSEngine::EngineView<COMPONENTS>;
