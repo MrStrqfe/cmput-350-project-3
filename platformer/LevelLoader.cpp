@@ -27,7 +27,7 @@ struct MapTile {
 // solid, and 'S' tiles also spawn stars.
 std::vector<MapMarker> LoadMap(EngineViewT& engine, Scene& scene, const std::string& path,
                                const std::string& file, int layer,
-                               const std::string& markerSymbols) {
+                               const std::string& markerSymbols, sf::Shader* shader) {
     std::ifstream in(path + file);
     if (!in) throw std::runtime_error("LoadMap: could not open '" + path + file + "'");
     auto fail = [&](const std::string& why) {
@@ -99,6 +99,7 @@ std::vector<MapMarker> LoadMap(EngineViewT& engine, Scene& scene, const std::str
             entities.AddComponent(
                 id, ECSEngine::SpriteComponent{tile.sprite, {{0.f, 0.f}, tileWidth, tileHeight},
                                                true, layer});
+            entities.GetComponent<ECSEngine::SpriteComponent>(id).shader = shader;
             if (tile.solid) {
                 ECSEngine::CollisionComponent collision{};
                 collision.staticEntity = 1;

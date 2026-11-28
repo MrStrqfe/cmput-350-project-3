@@ -19,6 +19,8 @@
 #include "systems/PauseSystem.h"
 #include "systems/VictorySystem.h"
 #include "systems/AnimationSystem.h"
+#include "systems/LanternSystem.h"
+#include "systems/LightSystem.h"
 
 // Builds the four scenes. Menu screens use a fixed kUiWidth x kUiHeight view,
 // so they scale with the window (bonus 2); gameplay uses the camera.
@@ -167,9 +169,15 @@ std::shared_ptr<Scene> MakeGameplayScene(EngineViewT& engine) {
     auto& entities = scene->GetEntityManager();
     auto& sprites = engine.GetSpriteManager();
 
+    // Tiles are drawn through the lighting shader, so the cave is dark except near
+    // lights. The player, HUD and stars don't use it, so they stand out in the dark.
+    auto& shaders = scene->GetShaderManager();
+    shaders.RegisterShader(gResourcePath + "shaders/lighting.frag", "lighting");
+    sf::Shader* lighting = shaders.GetShader("lighting");
+
     // The sky goes on the far wall layer, behind the world.
-    LoadMap(engine, *scene, gResourcePath, "sky.map", kLayerFarWall, "");
-    LoadMap(engine, *scene, gResourcePath, "world.map", kLayerWorld, "");
+    LoadMap(engine, *scene, gResourcePath, "sky.map", kLayerFarWall, "", lighting);
+    LoadMap(engine, *scene, gResourcePath, "world.map", kLayerWorld, "", lighting);
 
     // One extra star past the first wall, to test wall jumping.
     // It has no MovementComponent, so it floats in place until collected.
@@ -192,6 +200,8 @@ std::shared_ptr<Scene> MakeGameplayScene(EngineViewT& engine) {
     entities.AddComponent(player, ECSEngine::RespawnComponent{kPlayerStart});
     entities.AddComponent(player, ECSEngine::SpriteComponent{playerAnim.clips[kAnimIdle][0], {{0.0f, 0.0f}, 80.0f, 80.0f}, true});
     entities.AddComponent(player, playerAnim);
+    entities.AddComponent(player, LanternComponent{});
+    entities.AddComponent(player, LightComponent{260.0f, 0.03f});
     ECSEngine::CollisionComponent playerCollision{};
     playerCollision.collisionBox = {{15.0f, 18.0f}, 50.0f, 62.0f};
     playerCollision.previousCollisionBox = playerCollision.collisionBox;
@@ -237,9 +247,11 @@ std::shared_ptr<Scene> MakeGameplayScene(EngineViewT& engine) {
     systems.AddSystem(std::make_unique<ECSEngine::GravitySystem<COMPONENTS>>());
     systems.AddSystem(std::make_unique<ECSEngine::MovementSystem<COMPONENTS>>());
     systems.AddSystem(std::make_unique<ECSEngine::CollisionSystem<COMPONENTS>>());
+    systems.AddSystem(std::make_unique<LanternSystem>());
     systems.AddSystem(std::make_unique<ECSEngine::ScoreSystem<COMPONENTS>>());
     systems.AddSystem(std::make_unique<ECSEngine::CameraSystem<COMPONENTS>>());
     systems.AddSystem(std::make_unique<AnimationSystem>());
+    systems.AddSystem(std::make_unique<LightSystem>());
     systems.AddSystem(std::make_unique<ECSEngine::SpriteSystem<COMPONENTS>>(kParallax));
     systems.AddSystem(std::make_unique<ECSEngine::SpawnSystem<COMPONENTS>>());
     return scene;

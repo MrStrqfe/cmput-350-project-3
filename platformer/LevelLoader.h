@@ -17,5 +17,8 @@ inline const ECSEngine::Rect kStarSource{{640.0f, 320.0f}, 64.0f, 64.0f};
 
 // Loads file into scene, drawing its tiles on layer
 // Characters in markerSymbols are returned as markers instead of made into tiles
+// If shader isn't nullptr, every tile is drawn with it
 // Throws if the file is missing or broken
-std::vector<MapMarker> LoadMap(EngineViewT& engine, Scene& scene, const std::string& path, const std::string& file, int layer, const std::string& markerSymbols);
+std::vector<MapMarker> LoadMap(EngineViewT& engine, Scene& scene, const std::string& path, 
+                                const std::string& file, int layer, const std::string& markerSymbols,
+                                sf::Shader* shader = nullptr);

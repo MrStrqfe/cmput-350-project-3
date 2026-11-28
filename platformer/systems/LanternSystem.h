@@ -10,7 +10,7 @@
 
 // Burns lantern oil each frame, starts a flare when F is pressed
 // and sets the entity's light radius from its oil. Out of oil 
-// sends it back to it's respawn point
+// sends it back to its respawn point
 class LanternSystem : public ECSEngine::System<COMPONENTS> {
 public:
     const std::string& GetName() const override {
